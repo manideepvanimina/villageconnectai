@@ -19,7 +19,12 @@ export const HomePage: React.FC = () => {
     setIsSellModalOpen, 
     refreshTrigger, 
     triggerRefresh, 
-    showToast 
+    showToast,
+    currentUser,
+    sessionToken,
+    setIsAuthModalOpen,
+    setDirectoryCategoryFilter,
+    setDirectoryViewMode
   } = useApp();
 
   const [updates, setUpdates] = useState<Update[]>([]);
@@ -48,9 +53,14 @@ export const HomePage: React.FC = () => {
 
   // Peer verification action
   const handleVerifyNotice = async (updateId: string) => {
+    if (!currentUser) {
+      showToast('Please sign in to verify community notices.');
+      setIsAuthModalOpen(true);
+      return;
+    }
     setVerifyingId(updateId);
     try {
-      const res = await api.verifyUpdate(updateId);
+      const res = await api.verifyUpdate(updateId, sessionToken || undefined, currentUser.id);
       showToast(res.message);
       triggerRefresh();
     } catch (err: any) {
@@ -100,7 +110,7 @@ export const HomePage: React.FC = () => {
         </h3>
         <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-6 gap-2 sm:gap-3">
           <button
-            onClick={() => setActiveTab('agriculture')}
+            onClick={() => { setDirectoryCategoryFilter('tractor'); setActiveTab('directory'); }}
             className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-white border border-stone-200 hover:border-amber-400 hover:bg-amber-50/50 shadow-sm transition-all group active:scale-95"
           >
             <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800 group-hover:scale-110 transition-transform mb-1.5">
@@ -111,7 +121,7 @@ export const HomePage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('directory')}
+            onClick={() => { setDirectoryCategoryFilter('electrician'); setActiveTab('directory'); }}
             className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-white border border-stone-200 hover:border-amber-400 hover:bg-amber-50/50 shadow-sm transition-all group active:scale-95"
           >
             <div className="w-10 h-10 rounded-xl bg-saffron-100 flex items-center justify-center text-saffron-800 group-hover:scale-110 transition-transform mb-1.5">
@@ -122,7 +132,7 @@ export const HomePage: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setActiveTab('agriculture')}
+            onClick={() => { setDirectoryCategoryFilter('farm_labor'); setActiveTab('directory'); }}
             className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl bg-white border border-stone-200 hover:border-amber-400 hover:bg-amber-50/50 shadow-sm transition-all group active:scale-95"
           >
             <div className="w-10 h-10 rounded-xl bg-krishi-100 flex items-center justify-center text-krishi-800 group-hover:scale-110 transition-transform mb-1.5">
@@ -158,7 +168,7 @@ export const HomePage: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => setActiveTab('directory')}
+            onClick={() => { setDirectoryViewMode('map'); setActiveTab('directory'); }}
             className="text-xs font-bold text-saffron-700 hover:text-saffron-800"
           >
             Directory Map ↗

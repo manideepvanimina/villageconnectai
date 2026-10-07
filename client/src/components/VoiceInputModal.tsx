@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 
 export const VoiceInputModal: React.FC = () => {
-  const { isVoiceModalOpen, setIsVoiceModalOpen, language, selectedVillage, t, setActiveTab } = useApp();
+  const { isVoiceModalOpen, setIsVoiceModalOpen, language, setVoiceSearchQuery, t, setActiveTab } = useApp();
   const [transcript, setTranscript] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
@@ -67,13 +67,11 @@ export const VoiceInputModal: React.FC = () => {
 
   if (!isVoiceModalOpen) return null;
 
-  const handleApplyVoice = async () => {
+  const handleApplyVoice = () => {
     if (!transcript.trim()) return;
+    setVoiceSearchQuery(transcript.trim());
     setIsVoiceModalOpen(false);
     setActiveTab('home');
-    // Call smart search directly or populate
-    const villageId = selectedVillage?.id || '11111111-1111-1111-1111-111111111111';
-    await api.smartSearch(transcript, villageId, language);
   };
 
   return (

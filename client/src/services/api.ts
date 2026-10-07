@@ -1,16 +1,92 @@
-import { Village, Service, Product, Update, GovernmentScheme, SmartSearchResult, Language } from '../types';
+import { Village, Service, Product, Update, GovernmentScheme, SmartSearchResult, Language, UserProfile, DemoUser } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
+function getAuthHeaders(token?: string): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 export const api = {
+  // -------------------------------------------------------------------
+  // Authentication & Profile Management
+  // -------------------------------------------------------------------
+  async getDemoUsers(): Promise<DemoUser[]> {
+    const res = await fetch(`${API_BASE_URL}/api/auth/demo-users`);
+    if (!res.ok) throw new Error('Failed to fetch demo users');
+    return res.json();
+  },
+
+  async getMyProfile(token: string): Promise<UserProfile> {
+    const res = await fetch(`${API_BASE_URL}/api/profile/me`, {
+      headers: getAuthHeaders(token),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to fetch user profile');
+    }
+    return res.json();
+  },
+
+  async getProfileById(id: string): Promise<UserProfile> {
+    const res = await fetch(`${API_BASE_URL}/api/profiles/${id}`);
+    if (!res.ok) throw new Error('Failed to fetch profile');
+    return res.json();
+  },
+
+  async updateProfile(data: Partial<UserProfile>, token: string): Promise<{ success: boolean; message: string; profile: UserProfile }> {
+    const res = await fetch(`${API_BASE_URL}/api/profile`, {
+      method: 'PUT',
+      headers: getAuthHeaders(token),
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to update profile');
+    }
+    return res.json();
+  },
+
+  async uploadAvatar(imageBase64: string, mimeType: string, token: string): Promise<{ success: boolean; message: string; avatar_url: string; profile: UserProfile }> {
+    const res = await fetch(`${API_BASE_URL}/api/profile/avatar`, {
+      method: 'POST',
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ imageBase64, mimeType }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to upload profile picture');
+    }
+    return res.json();
+  },
+
+  async removeAvatar(token: string): Promise<{ success: boolean; message: string; avatar_url: null; profile: UserProfile }> {
+    const res = await fetch(`${API_BASE_URL}/api/profile/avatar`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(token),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to remove profile picture');
+    }
+    return res.json();
+  },
+
+  // -------------------------------------------------------------------
   // Villages
+  // -------------------------------------------------------------------
   async getVillages(): Promise<Village[]> {
     const res = await fetch(`${API_BASE_URL}/api/villages`);
     if (!res.ok) throw new Error('Failed to fetch villages');
     return res.json();
   },
 
+  // -------------------------------------------------------------------
   // Services / Directory
+  // -------------------------------------------------------------------
   async getServices(params?: { village_id?: string; category?: string; search?: string; availability?: string }): Promise<Service[]> {
     const query = new URLSearchParams();
     if (params?.village_id) query.append('village_id', params.village_id);
@@ -23,17 +99,19 @@ export const api = {
     return res.json();
   },
 
-  async addService(data: Partial<Service>): Promise<Service> {
+  async addService(data: Partial<Service>, token?: string): Promise<Service> {
     const res = await fetch(`${API_BASE_URL}/api/services`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(token),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to create service');
     return res.json();
   },
 
+  // -------------------------------------------------------------------
   // Products / Marketplace
+  // -------------------------------------------------------------------
   async getProducts(params?: { village_id?: string; category?: string; search?: string }): Promise<Product[]> {
     const query = new URLSearchParams();
     if (params?.village_id) query.append('village_id', params.village_id);
@@ -45,17 +123,19 @@ export const api = {
     return res.json();
   },
 
-  async addProduct(data: Partial<Product>): Promise<Product> {
+  async addProduct(data: Partial<Product>, token?: string): Promise<Product> {
     const res = await fetch(`${API_BASE_URL}/api/products`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(token),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to create product listing');
     return res.json();
   },
 
+  // -------------------------------------------------------------------
   // Community Updates & Peer Verification
+  // -------------------------------------------------------------------
   async getUpdates(village_id?: string): Promise<Update[]> {
     const query = village_id ? `?village_id=${village_id}` : '';
     const res = await fetch(`${API_BASE_URL}/api/updates${query}`);
@@ -63,20 +143,20 @@ export const api = {
     return res.json();
   },
 
-  async addUpdate(data: Partial<Update>): Promise<Update> {
+  async addUpdate(data: Partial<Update>, token?: string): Promise<Update> {
     const res = await fetch(`${API_BASE_URL}/api/updates`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(token),
       body: JSON.stringify(data),
     });
     if (!res.ok) throw new Error('Failed to create community update');
     return res.json();
   },
 
-  async verifyUpdate(updateId: string, userId?: string): Promise<any> {
+  async verifyUpdate(updateId: string, token?: string, userId?: string): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/api/updates/${updateId}/verify`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(token),
       body: JSON.stringify({ user_id: userId }),
     });
     if (!res.ok) {
@@ -86,14 +166,18 @@ export const api = {
     return res.json();
   },
 
+  // -------------------------------------------------------------------
   // Government Schemes
+  // -------------------------------------------------------------------
   async getGovernmentSchemes(): Promise<GovernmentScheme[]> {
     const res = await fetch(`${API_BASE_URL}/api/government-schemes`);
     if (!res.ok) throw new Error('Failed to fetch government schemes');
     return res.json();
   },
 
+  // -------------------------------------------------------------------
   // AI Smart Search Agent
+  // -------------------------------------------------------------------
   async smartSearch(query: string, village_id: string, language: Language = 'en'): Promise<SmartSearchResult> {
     const res = await fetch(`${API_BASE_URL}/api/ai/smart-search`, {
       method: 'POST',
@@ -104,7 +188,9 @@ export const api = {
     return res.json();
   },
 
+  // -------------------------------------------------------------------
   // AI Assistant Chat
+  // -------------------------------------------------------------------
   async chatAI(message: string, village_id: string, language: Language = 'en'): Promise<any> {
     const res = await fetch(`${API_BASE_URL}/api/ai/chat`, {
       method: 'POST',

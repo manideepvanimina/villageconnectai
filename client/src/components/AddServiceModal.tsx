@@ -4,17 +4,37 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 
 export const AddServiceModal: React.FC = () => {
-  const { isServiceModalOpen, setIsServiceModalOpen, selectedVillage, t, triggerRefresh, showToast } = useApp();
+  const { 
+    isServiceModalOpen, 
+    setIsServiceModalOpen, 
+    selectedVillage, 
+    t, 
+    triggerRefresh, 
+    showToast,
+    currentUser,
+    userProfile,
+    sessionToken 
+  } = useApp();
 
   const [businessName, setBusinessName] = useState('');
-  const [providerName, setProviderName] = useState('');
+  const [providerName, setProviderName] = useState(userProfile?.full_name || '');
   const [category, setCategory] = useState('electrician');
-  const [contactNumber, setContactNumber] = useState('');
-  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [contactNumber, setContactNumber] = useState(userProfile?.phone_number || '');
+  const [whatsappNumber, setWhatsappNumber] = useState(userProfile?.phone_number || '');
   const [rateAmount, setRateAmount] = useState('');
   const [pricingUnit, setPricingUnit] = useState('per visit');
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (userProfile) {
+      if (!providerName && userProfile.full_name) setProviderName(userProfile.full_name);
+      if (!contactNumber && userProfile.phone_number) {
+        setContactNumber(userProfile.phone_number);
+        setWhatsappNumber(userProfile.phone_number);
+      }
+    }
+  }, [userProfile]);
 
   if (!isServiceModalOpen) return null;
 
@@ -36,7 +56,7 @@ export const AddServiceModal: React.FC = () => {
         pricing_unit: pricingUnit,
         details: details || 'Reliable local village service provider.',
         availability_status: 'available',
-      });
+      }, sessionToken || undefined);
 
       showToast('🔧 Service registered in Village Directory successfully!');
       triggerRefresh();

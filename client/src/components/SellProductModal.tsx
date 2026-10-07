@@ -4,7 +4,17 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 
 export const SellProductModal: React.FC = () => {
-  const { isSellModalOpen, setIsSellModalOpen, selectedVillage, t, triggerRefresh, showToast } = useApp();
+  const { 
+    isSellModalOpen, 
+    setIsSellModalOpen, 
+    selectedVillage, 
+    t, 
+    triggerRefresh, 
+    showToast,
+    currentUser,
+    userProfile,
+    sessionToken 
+  } = useApp();
 
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
@@ -12,10 +22,17 @@ export const SellProductModal: React.FC = () => {
   const [category, setCategory] = useState('produce');
   const [quantity, setQuantity] = useState('');
   const [description, setDescription] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [sellerName, setSellerName] = useState('');
+  const [contactPhone, setContactPhone] = useState(userProfile?.phone_number || '');
+  const [sellerName, setSellerName] = useState(userProfile?.full_name || '');
   const [isOrganic, setIsOrganic] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (userProfile) {
+      if (!sellerName && userProfile.full_name) setSellerName(userProfile.full_name);
+      if (!contactPhone && userProfile.phone_number) setContactPhone(userProfile.phone_number);
+    }
+  }, [userProfile]);
 
   if (!isSellModalOpen) return null;
 
@@ -35,9 +52,9 @@ export const SellProductModal: React.FC = () => {
         quantity: quantity || 'Available for sale',
         description: description || 'Fresh rural produce directly from local farmer.',
         contact_phone: contactPhone,
-        seller_name: sellerName || 'Local Farmer',
+        seller_name: sellerName || userProfile?.full_name || 'Local Farmer',
         is_organic: isOrganic,
-      });
+      }, sessionToken || undefined);
 
       showToast('🛒 Produce listed on Village Marketplace successfully!');
       triggerRefresh();

@@ -94,3 +94,37 @@ export interface SmartSearchResult {
   confidence: string;
   timestamp: string;
 }
+
+export interface UserProfile {
+  id: string;
+  phone_number: string | null;
+  full_name: string;
+  username: string | null;
+  email: string | null;
+  bio: string | null;
+  address: string | null;
+  avatar_url: string | null;
+  home_village_id: string | null;
+  village?: Village;
+  language: Language;
+  role: UserRole;
+  reputation_score: number;
+  is_verified: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DemoUser {
+  id: string;
+  full_name: string;
+  username: string;
+  phone_number: string;
+  email: string;
+  role: UserRole;
+  avatar_url: string | null;
+  bio: string | null;
+  address: string | null;
+  home_village_id: string;
+  village?: { id: string; name: string; district: string };
+}
+

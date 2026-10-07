@@ -12,7 +12,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -42,6 +43,39 @@ async function executeQuery(text, params = []) {
 }
 
 // ---------------------------------------------------------------------
+// AUTHENTICATION MIDDLEWARE
+// ---------------------------------------------------------------------
+async function authenticateUser(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required. Please log in.' });
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid or expired session. Please log in again.' });
+    }
+    req.user = user;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Authentication error: ' + err.message });
+  }
+}
+
+async function optionalAuthenticateUser(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) req.user = user;
+    }
+  } catch (e) {}
+  next();
+}
+
+// ---------------------------------------------------------------------
 // HEALTH CHECK
 // ---------------------------------------------------------------------
 app.get('/api/health', (req, res) => {
@@ -52,6 +86,304 @@ app.get('/api/health', (req, res) => {
     database: 'Supabase Cloud PostgreSQL connected',
     timestamp: new Date().toISOString()
   });
+});
+
+// ---------------------------------------------------------------------
+// AUTH & DEMO USERS API
+// ---------------------------------------------------------------------
+app.get('/api/auth/demo-users', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, phone_number, email, role, avatar_url, bio, address, home_village_id, village:villages(id, name, district, state)')
+      .in('id', [
+        'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+        'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        'dddddddd-dddd-dddd-dddd-dddddddddddd',
+        'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+        'ffffffff-ffff-ffff-ffff-ffffffffffff'
+      ]);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---------------------------------------------------------------------
+// USER PROFILES API
+// ---------------------------------------------------------------------
+
+// Get authenticated user's own profile
+app.get('/api/profile/me', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    let { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*, village:villages(id, name, district, state)')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    // If profile row doesn't exist yet, auto-provision from auth user metadata
+    if (!profile) {
+      const defaultEmail = req.user.email || '';
+      const defaultName = req.user.user_metadata?.full_name || defaultEmail.split('@')[0] || 'Resident';
+      const defaultPhone = req.user.user_metadata?.phone_number || req.user.phone || null;
+      const defaultVillage = req.user.user_metadata?.home_village_id || '11111111-1111-1111-1111-111111111111';
+
+      const { data: newProfile, error: insertErr } = await supabase
+        .from('profiles')
+        .insert([{
+          id: userId,
+          full_name: defaultName,
+          phone_number: defaultPhone,
+          email: defaultEmail,
+          home_village_id: defaultVillage,
+          language: req.user.user_metadata?.language || 'en',
+          role: req.user.user_metadata?.role || 'villager',
+          reputation_score: 10,
+          is_verified: false,
+          bio: 'Resident connected via VillageConnect AI network.'
+        }])
+        .select('*, village:villages(id, name, district, state)')
+        .single();
+
+      if (insertErr) throw insertErr;
+      profile = newProfile;
+    }
+
+    res.json(profile);
+  } catch (err) {
+    console.error('Error fetching profile:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get public profile by ID
+app.get('/api/profiles/:id', async (req, res) => {
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, avatar_url, role, reputation_score, is_verified, bio, village:villages(id, name, district, state)')
+      .eq('id', req.params.id)
+      .single();
+
+    if (error || !profile) return res.status(404).json({ error: 'Profile not found' });
+    res.json(profile);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update authenticated user's own profile
+app.put('/api/profile', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      full_name,
+      username,
+      phone_number,
+      bio,
+      address,
+      home_village_id,
+      language,
+      role
+    } = req.body;
+
+    // Validation 1: Required Full Name
+    if (!full_name || !full_name.trim()) {
+      return res.status(400).json({ error: 'Full name is required.' });
+    }
+    if (full_name.trim().length > 100) {
+      return res.status(400).json({ error: 'Full name cannot exceed 100 characters.' });
+    }
+
+    // Validation 2: Username format & uniqueness check
+    let cleanUsername = null;
+    if (username && username.trim()) {
+      cleanUsername = username.trim().toLowerCase();
+      if (!/^[a-zA-Z0-9_]{3,30}$/.test(cleanUsername)) {
+        return res.status(400).json({ 
+          error: 'Username must be between 3 and 30 characters and contain only letters, numbers, and underscores.' 
+        });
+      }
+
+      const { data: existingUser, error: checkErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('username', cleanUsername)
+        .neq('id', userId)
+        .maybeSingle();
+
+      if (checkErr) throw checkErr;
+      if (existingUser) {
+        return res.status(400).json({ error: `Username "@${cleanUsername}" is already taken. Please choose another.` });
+      }
+    }
+
+    // Validation 3: Phone number length/format
+    if (phone_number && phone_number.trim()) {
+      const cleanPhone = phone_number.trim();
+      if (cleanPhone.length > 20 || !/^[0-9+\s\-()]{7,20}$/.test(cleanPhone)) {
+        return res.status(400).json({ error: 'Please enter a valid phone number.' });
+      }
+
+      const { data: existingPhone, error: phoneErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone_number', cleanPhone)
+        .neq('id', userId)
+        .maybeSingle();
+
+      if (phoneErr) throw phoneErr;
+      if (existingPhone) {
+        return res.status(400).json({ error: 'This phone number is already registered to another account.' });
+      }
+    }
+
+    // Validation 4: Bio length
+    if (bio && bio.length > 500) {
+      return res.status(400).json({ error: 'Bio cannot exceed 500 characters.' });
+    }
+
+    // Validation 5: Address length
+    if (address && address.length > 250) {
+      return res.status(400).json({ error: 'Address cannot exceed 250 characters.' });
+    }
+
+    // Validation 6: Allowed languages
+    const validLanguages = ['en', 'te', 'hi'];
+    const selectedLanguage = validLanguages.includes(language) ? language : 'en';
+
+    // Validation 7: Allowed roles
+    const validRoles = ['villager', 'farmer', 'worker', 'business', 'moderator', 'admin'];
+    const selectedRole = validRoles.includes(role) ? role : 'villager';
+
+    const updatePayload = {
+      full_name: full_name.trim(),
+      username: cleanUsername,
+      phone_number: phone_number ? phone_number.trim() : null,
+      bio: bio ? bio.trim() : '',
+      address: address ? address.trim() : '',
+      language: selectedLanguage,
+      role: selectedRole,
+      updated_at: new Date().toISOString()
+    };
+
+    if (home_village_id) {
+      updatePayload.home_village_id = home_village_id;
+    }
+
+    const { data: updatedProfile, error: updateErr } = await supabase
+      .from('profiles')
+      .update(updatePayload)
+      .eq('id', userId)
+      .select('*, village:villages(id, name, district, state)')
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully!',
+      profile: updatedProfile
+    });
+  } catch (err) {
+    console.error('Error updating profile:', err);
+    res.status(500).json({ error: err.message || 'Failed to update profile' });
+  }
+});
+
+// Upload profile picture (Avatar)
+app.post('/api/profile/avatar', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const rawData = req.body.imageBase64 || req.body.imageData;
+    if (!rawData) {
+      return res.status(400).json({ error: 'Image data is required.' });
+    }
+
+    let detectedMime = req.body.mimeType;
+    if (!detectedMime && typeof rawData === 'string' && rawData.startsWith('data:image/')) {
+      const match = rawData.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,/);
+      if (match) detectedMime = match[1];
+    }
+    const mimeType = detectedMime || 'image/jpeg';
+
+    const base64Data = rawData.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    if (buffer.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Profile picture must be under 5 MB.' });
+    }
+
+    const ext = (mimeType.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+    const allowedExtensions = ['jpg', 'png', 'webp', 'gif'];
+    if (!allowedExtensions.includes(ext.toLowerCase())) {
+      return res.status(400).json({ error: 'Unsupported file format. Please upload JPG, PNG, WEBP, or GIF.' });
+    }
+
+    const filePath = `user_${userId}/avatar_${Date.now()}.${ext}`;
+
+    const { data: uploadData, error: uploadErr } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, buffer, {
+        contentType: mimeType || 'image/jpeg',
+        upsert: true
+      });
+
+    if (uploadErr) throw uploadErr;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select('*, village:villages(id, name, district, state)')
+      .single();
+
+    if (profileErr) throw profileErr;
+
+    res.json({
+      success: true,
+      message: 'Profile picture uploaded successfully!',
+      avatar_url: publicUrl,
+      profile
+    });
+  } catch (err) {
+    console.error('Error uploading avatar:', err);
+    res.status(500).json({ error: err.message || 'Avatar upload failed' });
+  }
+});
+
+// Remove profile picture
+app.delete('/api/profile/avatar', authenticateUser, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .update({ avatar_url: null, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select('*, village:villages(id, name, district, state)')
+      .single();
+
+    if (profileErr) throw profileErr;
+
+    res.json({
+      success: true,
+      message: 'Profile picture removed successfully.',
+      avatar_url: null,
+      profile
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to remove avatar' });
+  }
 });
 
 // ---------------------------------------------------------------------
@@ -119,7 +451,7 @@ app.get('/api/services', async (req, res) => {
   }
 });
 
-app.post('/api/services', async (req, res) => {
+app.post('/api/services', optionalAuthenticateUser, async (req, res) => {
   try {
     const {
       village_id,
@@ -134,9 +466,12 @@ app.post('/api/services', async (req, res) => {
       availability_status
     } = req.body;
 
+    const userId = req.user?.id || req.body.user_id || null;
+
     const { data, error } = await supabase
       .from('services')
       .insert([{
+        user_id: userId,
         village_id,
         category,
         business_name,
@@ -195,7 +530,7 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', optionalAuthenticateUser, async (req, res) => {
   try {
     const {
       village_id,
@@ -210,9 +545,12 @@ app.post('/api/products', async (req, res) => {
       is_organic
     } = req.body;
 
+    const userId = req.user?.id || req.body.user_id || null;
+
     const { data, error } = await supabase
       .from('products')
       .insert([{
+        user_id: userId,
         village_id,
         title,
         price: Number(price) || 0,
@@ -261,15 +599,17 @@ app.get('/api/updates', async (req, res) => {
   }
 });
 
-app.post('/api/updates', async (req, res) => {
+app.post('/api/updates', optionalAuthenticateUser, async (req, res) => {
   try {
     const { village_id, author_name, title, content, category, is_emergency } = req.body;
+    const userId = req.user?.id || req.body.user_id || null;
 
     const { data, error } = await supabase
       .from('updates')
       .insert([{
+        user_id: userId,
         village_id,
-        author_name: author_name || 'Village Resident',
+        author_name: author_name || (req.user?.user_metadata?.full_name || 'Village Resident'),
         title,
         content,
         category: category || 'general',
@@ -289,10 +629,14 @@ app.post('/api/updates', async (req, res) => {
 });
 
 // Peer Verification Action (Target: 5 unique users to turn pending into live)
-app.post('/api/updates/:id/verify', async (req, res) => {
+app.post('/api/updates/:id/verify', optionalAuthenticateUser, async (req, res) => {
   try {
     const updateId = req.params.id;
-    const userId = req.body.user_id || 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    const userId = req.user?.id || req.body.user_id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Please log in to verify community notices.' });
+    }
 
     // 1. Fetch current post
     const { data: post, error: fetchErr } = await supabase
@@ -302,6 +646,11 @@ app.post('/api/updates/:id/verify', async (req, res) => {
       .single();
 
     if (fetchErr || !post) return res.status(404).json({ error: 'Post not found' });
+
+    // Prevent self-verification
+    if (post.user_id && post.user_id === userId) {
+      return res.status(400).json({ message: 'You cannot verify your own community notice.' });
+    }
 
     // 2. Insert into verifications table (enforces unique constraint per user)
     const { error: verifyErr } = await supabase
@@ -436,7 +785,7 @@ app.post('/api/ai/smart-search', async (req, res) => {
         explanation = `Currently no direct ${parsed.category} listed in ${villageName}. Checking nearby villages within 15 km...`;
         recommendedActions = [
           { type: 'DIRECTORY', label: 'Browse Full Directory', action: '/directory' },
-          { type: 'POST_REQUEST', label: 'Post a Community Request', action: '/community' }
+          { type: 'POST_REQUEST', label: 'Post a Community Request', action: '/home' }
         ];
       }
     } else if (parsed.intent === 'SELL_PRODUCT' || parsed.intent === 'FIND_PRODUCT') {

@@ -7,6 +7,7 @@ import { PostUpdateModal } from './components/PostUpdateModal';
 import { SellProductModal } from './components/SellProductModal';
 import { AddServiceModal } from './components/AddServiceModal';
 import { LocationPickerModal } from './components/LocationPickerModal';
+import { AuthModal } from './components/AuthModal';
 
 import { HomePage } from './pages/HomePage';
 import { DirectoryPage } from './pages/DirectoryPage';
@@ -75,6 +76,7 @@ const AppContent: React.FC = () => {
       <SellProductModal />
       <AddServiceModal />
       <LocationPickerModal isOpen={isLocationModalOpen} onClose={() => setIsLocationModalOpen(false)} />
+      <AuthModal />
 
       {/* Toast Notification Banner */}
       {toastMessage && (

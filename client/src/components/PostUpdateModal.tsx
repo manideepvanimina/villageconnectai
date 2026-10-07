@@ -4,14 +4,30 @@ import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 
 export const PostUpdateModal: React.FC = () => {
-  const { isPostModalOpen, setIsPostModalOpen, selectedVillage, t, triggerRefresh, showToast } = useApp();
+  const { 
+    isPostModalOpen, 
+    setIsPostModalOpen, 
+    selectedVillage, 
+    t, 
+    triggerRefresh, 
+    showToast,
+    currentUser,
+    userProfile,
+    sessionToken
+  } = useApp();
   
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState<'notice' | 'event' | 'emergency' | 'general'>('notice');
-  const [authorName, setAuthorName] = useState('');
+  const [authorName, setAuthorName] = useState(userProfile?.full_name || '');
   const [isEmergency, setIsEmergency] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  React.useEffect(() => {
+    if (userProfile?.full_name && !authorName) {
+      setAuthorName(userProfile.full_name);
+    }
+  }, [userProfile]);
 
   if (!isPostModalOpen) return null;
 
@@ -27,9 +43,9 @@ export const PostUpdateModal: React.FC = () => {
         title,
         content,
         category: isEmergency ? 'emergency' : category,
-        author_name: authorName || 'Village Resident',
+        author_name: authorName || userProfile?.full_name || 'Village Resident',
         is_emergency: isEmergency,
-      });
+      }, sessionToken || undefined);
 
       showToast(isEmergency 
         ? '🚨 Emergency notice published immediately!' 

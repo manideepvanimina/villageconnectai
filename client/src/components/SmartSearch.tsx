@@ -1,11 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Mic, Sparkles, Phone, MessageSquare, ExternalLink, CheckCircle2, ChevronRight, Loader2, ArrowRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { api, speakText } from '../services/api';
 import { SmartSearchResult } from '../types';
 
 export const SmartSearch: React.FC = () => {
-  const { selectedVillage, language, t, setIsVoiceModalOpen, setActiveTab } = useApp();
+  const { 
+    selectedVillage, 
+    language, 
+    t, 
+    setIsVoiceModalOpen, 
+    setActiveTab, 
+    voiceSearchQuery, 
+    setVoiceSearchQuery,
+    setIsPostModalOpen,
+    setIsSellModalOpen
+  } = useApp();
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<SmartSearchResult | null>(null);
@@ -18,6 +28,15 @@ export const SmartSearch: React.FC = () => {
     { label: '📜 Kisan Schemes', query: 'What government farming schemes can I apply for?' },
     { label: '🌾 Harvest labor team', query: 'I need farm labor for paddy harvesting this weekend' },
   ];
+
+  // Auto-run when speech was captured via VoiceInputModal
+  useEffect(() => {
+    if (voiceSearchQuery) {
+      setQuery(voiceSearchQuery);
+      handleSearch(voiceSearchQuery);
+      setVoiceSearchQuery(null);
+    }
+  }, [voiceSearchQuery]);
 
   const handleSearch = async (searchQuery?: string) => {
     const q = searchQuery || query;
@@ -238,8 +257,15 @@ export const SmartSearch: React.FC = () => {
                 <button
                   key={idx}
                   onClick={() => {
-                    if (action.action.startsWith('/')) {
-                      setActiveTab(action.action.replace('/', ''));
+                    if (action.type === 'POST_REQUEST') {
+                      setActiveTab('home');
+                      setIsPostModalOpen(true);
+                    } else if (action.type === 'CREATE_LISTING') {
+                      setActiveTab('marketplace');
+                      setIsSellModalOpen(true);
+                    } else if (action.action.startsWith('/')) {
+                      const tab = action.action.replace('/', '');
+                      setActiveTab(tab === 'community' ? 'home' : tab);
                     } else if (action.action.startsWith('http') || action.action.startsWith('tel:')) {
                       window.open(action.action, '_blank');
                     }

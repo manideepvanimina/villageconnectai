@@ -9,13 +9,30 @@ import {
 } from 'lucide-react';
 
 export const DirectoryPage: React.FC = () => {
-  const { selectedVillage, t, setIsServiceModalOpen, refreshTrigger } = useApp();
+  const { 
+    selectedVillage, 
+    t, 
+    setIsServiceModalOpen, 
+    refreshTrigger,
+    directoryCategoryFilter,
+    setDirectoryCategoryFilter,
+    directoryViewMode,
+    setDirectoryViewMode
+  } = useApp();
   const [services, setServices] = useState<Service[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>(directoryCategoryFilter || 'all');
   const [availabilityFilter, setAvailabilityFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>(directoryViewMode || 'list');
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (directoryCategoryFilter) setSelectedCategory(directoryCategoryFilter);
+  }, [directoryCategoryFilter]);
+
+  useEffect(() => {
+    if (directoryViewMode) setViewMode(directoryViewMode);
+  }, [directoryViewMode]);
 
   const categories = [
     { id: 'all', label: 'All Services' },
