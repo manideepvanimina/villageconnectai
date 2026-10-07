@@ -6,6 +6,7 @@ import { VoiceInputModal } from './components/VoiceInputModal';
 import { PostUpdateModal } from './components/PostUpdateModal';
 import { SellProductModal } from './components/SellProductModal';
 import { AddServiceModal } from './components/AddServiceModal';
+import { LocationPickerModal } from './components/LocationPickerModal';
 
 import { HomePage } from './pages/HomePage';
 import { DirectoryPage } from './pages/DirectoryPage';
@@ -17,7 +18,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { CheckCircle2, Home, Wrench, Tractor, ShoppingBag, Sparkles, User } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { activeTab, setActiveTab, t, toastMessage } = useApp();
+  const { activeTab, setActiveTab, t, toastMessage, isLocationModalOpen, setIsLocationModalOpen } = useApp();
 
   return (
     <div className="min-h-screen bg-stone-50/70 text-stone-900 flex flex-col font-sans">
@@ -73,6 +74,7 @@ const AppContent: React.FC = () => {
       <PostUpdateModal />
       <SellProductModal />
       <AddServiceModal />
+      <LocationPickerModal isOpen={isLocationModalOpen} onClose={() => setIsLocationModalOpen(false)} />
 
       {/* Toast Notification Banner */}
       {toastMessage && (

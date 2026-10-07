@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { api } from '../services/api';
 import { Service } from '../types';
+import { VillageMapView } from '../components/VillageMapView';
 import { 
   Search, Phone, MessageSquare, Plus, Star, MapPin, 
-  CheckCircle2, Clock, Wrench, Tractor, Users, Zap, Shield
+  CheckCircle2, Clock, Wrench, Tractor, Users, Zap, Shield, Map, List
 } from 'lucide-react';
 
 export const DirectoryPage: React.FC = () => {
@@ -13,6 +14,7 @@ export const DirectoryPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [availabilityFilter, setAvailabilityFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [loading, setLoading] = useState(true);
 
   const categories = [
@@ -58,13 +60,42 @@ export const DirectoryPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsServiceModalOpen(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-saffron-600 hover:bg-saffron-700 text-white font-bold text-xs sm:text-sm shadow-sm active:scale-95 transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>{t.registerService}</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {/* List vs Map View Mode Toggle */}
+          <div className="flex items-center bg-stone-100 p-0.5 rounded-xl border border-stone-200 text-xs">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                viewMode === 'list'
+                  ? 'bg-white text-saffron-800 shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>List</span>
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                viewMode === 'map'
+                  ? 'bg-white text-saffron-800 shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Map className="w-3.5 h-3.5 text-saffron-600" />
+              <span>Maps</span>
+            </button>
+          </div>
+
+          <button
+            onClick={() => setIsServiceModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-saffron-600 hover:bg-saffron-700 text-white font-bold text-xs sm:text-sm shadow-sm active:scale-95 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">{t.registerService}</span>
+            <span className="sm:hidden">Register</span>
+          </button>
+        </div>
       </div>
 
       {/* Search Input Bar */}
@@ -126,8 +157,12 @@ export const DirectoryPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Provider Cards Grid */}
-      {loading ? (
+      {/* View Mode: Map vs List */}
+      {viewMode === 'map' ? (
+        <div className="animate-in fade-in duration-200">
+          <VillageMapView services={services} showNearbyVillages={true} />
+        </div>
+      ) : loading ? (
         <div className="text-center py-12 text-stone-400 text-sm">
           Loading directory records...
         </div>

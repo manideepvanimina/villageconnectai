@@ -12,6 +12,7 @@ export const Header: React.FC = () => {
     setLanguage,
     role,
     setRole,
+    setIsLocationModalOpen,
     t
   } = useApp();
 
@@ -35,8 +36,12 @@ export const Header: React.FC = () => {
               
               {/* Village Dropdown */}
               <div className="relative group">
-                <button className="flex items-center gap-1 text-xs font-semibold text-stone-700 hover:text-saffron-700 transition-colors py-0.5">
-                  <MapPin className="w-3.5 h-3.5 text-saffron-600 flex-shrink-0" />
+                <button 
+                  onClick={() => setIsLocationModalOpen(true)}
+                  className="flex items-center gap-1 text-xs font-semibold text-stone-700 hover:text-saffron-700 transition-colors py-0.5"
+                  title="Click to open interactive Google Maps & GPS village picker"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-saffron-600 flex-shrink-0 animate-pulse" />
                   <span className="truncate max-w-[120px] sm:max-w-[180px]">
                     {selectedVillage ? `${selectedVillage.name}, ${selectedVillage.district}` : t.selectVillage}
                   </span>
@@ -45,8 +50,14 @@ export const Header: React.FC = () => {
 
                 {/* Village Selection Menu */}
                 <div className="absolute left-0 top-full mt-1 w-64 bg-white rounded-xl shadow-rural-lg border border-amber-200 py-1.5 hidden group-hover:block z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-stone-500 border-b border-stone-100">
-                    {t.selectVillage} ({villages.length})
+                  <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-stone-500 border-b border-stone-100 flex items-center justify-between">
+                    <span>{t.selectVillage} ({villages.length})</span>
+                    <button 
+                      onClick={() => setIsLocationModalOpen(true)}
+                      className="text-[10px] text-saffron-700 hover:underline"
+                    >
+                      Map View
+                    </button>
                   </div>
                   {villages.map(v => (
                     <button

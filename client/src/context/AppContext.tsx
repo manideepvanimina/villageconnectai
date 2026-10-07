@@ -23,6 +23,8 @@ interface AppContextType {
   setIsServiceModalOpen: (open: boolean) => void;
   isVoiceModalOpen: boolean;
   setIsVoiceModalOpen: (open: boolean) => void;
+  isLocationModalOpen: boolean;
+  setIsLocationModalOpen: (open: boolean) => void;
   // Refresh triggers
   refreshTrigger: number;
   triggerRefresh: () => void;
@@ -44,6 +46,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSellModalOpen, setIsSellModalOpen] = useState(false);
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -104,6 +107,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsServiceModalOpen,
         isVoiceModalOpen,
         setIsVoiceModalOpen,
+        isLocationModalOpen,
+        setIsLocationModalOpen,
         refreshTrigger,
         triggerRefresh,
         toastMessage,

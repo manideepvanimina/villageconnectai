@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { SmartSearch } from '../components/SmartSearch';
 import { EmergencyBanner } from '../components/EmergencyBanner';
+import { VillageMapView } from '../components/VillageMapView';
 import { api } from '../services/api';
 import { Update, Service, Product } from '../types';
 import { 
@@ -142,6 +143,28 @@ export const HomePage: React.FC = () => {
             <span className="text-[10px] text-stone-500">Sell & Buy</span>
           </button>
         </div>
+      </div>
+
+      {/* Interactive Google Maps Village Resource Network */}
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <div>
+            <h3 className="text-base sm:text-lg font-extrabold text-stone-900 tracking-tight flex items-center gap-2">
+              <span>🗺️</span>
+              <span>Village Map & Resource Radar</span>
+            </h3>
+            <p className="text-xs text-stone-500">
+              Interactive Google Maps showing local providers, mandis, and neighboring villages
+            </p>
+          </div>
+          <button
+            onClick={() => setActiveTab('directory')}
+            className="text-xs font-bold text-saffron-700 hover:text-saffron-800"
+          >
+            Directory Map ↗
+          </button>
+        </div>
+        <VillageMapView services={featuredServices} showNearbyVillages={true} />
       </div>
 
       {/* Community Feed with 5-Peer Verification Logic */}
