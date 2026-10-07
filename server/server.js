@@ -193,39 +193,53 @@ app.put('/api/profile', authenticateUser, async (req, res) => {
       role
     } = req.body;
 
-    // Validation 1: Required Full Name
-    if (!full_name || !full_name.trim()) {
-      return res.status(400).json({ error: 'Full name is required.' });
+    // Fetch existing profile for fallback values on partial updates
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    // Validation 1: Full Name (if provided)
+    if (full_name !== undefined) {
+      if (!full_name || !full_name.trim()) {
+        return res.status(400).json({ error: 'Full name cannot be empty.' });
+      }
+      if (full_name.trim().length > 100) {
+        return res.status(400).json({ error: 'Full name cannot exceed 100 characters.' });
+      }
     }
-    if (full_name.trim().length > 100) {
-      return res.status(400).json({ error: 'Full name cannot exceed 100 characters.' });
-    }
+    const resolvedFullName = full_name !== undefined ? full_name.trim() : (existingProfile?.full_name || 'Resident');
 
     // Validation 2: Username format & uniqueness check
-    let cleanUsername = null;
-    if (username && username.trim()) {
-      cleanUsername = username.trim().toLowerCase();
-      if (!/^[a-zA-Z0-9_]{3,30}$/.test(cleanUsername)) {
-        return res.status(400).json({ 
-          error: 'Username must be between 3 and 30 characters and contain only letters, numbers, and underscores.' 
-        });
-      }
+    let cleanUsername = existingProfile?.username || null;
+    if (username !== undefined) {
+      if (username && username.trim()) {
+        cleanUsername = username.trim().toLowerCase();
+        if (!/^[a-zA-Z0-9_]{3,30}$/.test(cleanUsername)) {
+          return res.status(400).json({ 
+            error: 'Username must be between 3 and 30 characters and contain only letters, numbers, and underscores.' 
+          });
+        }
 
-      const { data: existingUser, error: checkErr } = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('username', cleanUsername)
-        .neq('id', userId)
-        .maybeSingle();
+        const { data: existingUser, error: checkErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .ilike('username', cleanUsername)
+          .neq('id', userId)
+          .maybeSingle();
 
-      if (checkErr) throw checkErr;
-      if (existingUser) {
-        return res.status(400).json({ error: `Username "@${cleanUsername}" is already taken. Please choose another.` });
+        if (checkErr) throw checkErr;
+        if (existingUser) {
+          return res.status(400).json({ error: `Username "@${cleanUsername}" is already taken. Please choose another.` });
+        }
+      } else {
+        cleanUsername = null;
       }
     }
 
     // Validation 3: Phone number length/format
-    if (phone_number && phone_number.trim()) {
+    if (phone_number !== undefined && phone_number && phone_number.trim()) {
       const cleanPhone = phone_number.trim();
       if (cleanPhone.length > 20 || !/^[0-9+\s\-()]{7,20}$/.test(cleanPhone)) {
         return res.status(400).json({ error: 'Please enter a valid phone number.' });
@@ -256,26 +270,24 @@ app.put('/api/profile', authenticateUser, async (req, res) => {
 
     // Validation 6: Allowed languages
     const validLanguages = ['en', 'te', 'hi'];
-    const selectedLanguage = validLanguages.includes(language) ? language : 'en';
+    const selectedLanguage = language ? (validLanguages.includes(language) ? language : 'en') : undefined;
 
     // Validation 7: Allowed roles
     const validRoles = ['villager', 'farmer', 'worker', 'business', 'moderator', 'admin'];
-    const selectedRole = validRoles.includes(role) ? role : 'villager';
+    const selectedRole = role ? (validRoles.includes(role) ? role : 'villager') : undefined;
 
     const updatePayload = {
-      full_name: full_name.trim(),
-      username: cleanUsername,
-      phone_number: phone_number ? phone_number.trim() : null,
-      bio: bio ? bio.trim() : '',
-      address: address ? address.trim() : '',
-      language: selectedLanguage,
-      role: selectedRole,
+      full_name: resolvedFullName,
       updated_at: new Date().toISOString()
     };
 
-    if (home_village_id) {
-      updatePayload.home_village_id = home_village_id;
-    }
+    if (username !== undefined) updatePayload.username = cleanUsername;
+    if (phone_number !== undefined) updatePayload.phone_number = phone_number ? phone_number.trim() : null;
+    if (bio !== undefined) updatePayload.bio = bio ? bio.trim() : '';
+    if (address !== undefined) updatePayload.address = address ? address.trim() : '';
+    if (selectedLanguage !== undefined) updatePayload.language = selectedLanguage;
+    if (selectedRole !== undefined) updatePayload.role = selectedRole;
+    if (home_village_id !== undefined) updatePayload.home_village_id = home_village_id;
 
     const { data: updatedProfile, error: updateErr } = await supabase
       .from('profiles')

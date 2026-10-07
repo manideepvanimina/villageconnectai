@@ -60,8 +60,12 @@ interface AppContextType {
   setIsLocationModalOpen: (open: boolean) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
-  authModalTab: 'login' | 'register';
-  setAuthModalTab: (tab: 'login' | 'register') => void;
+  authModalTab: 'login' | 'register' | 'map';
+  setAuthModalTab: (tab: 'login' | 'register' | 'map') => void;
+
+  // Village & Map Auth Actions
+  updateUserHomeVillage: (village: Village) => Promise<void>;
+  openLoginForVillage: (village: Village, tab?: 'login' | 'register') => void;
 
   // Refresh triggers & Toasts
   refreshTrigger: number;
@@ -98,7 +102,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
+  const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'map'>('login');
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -333,6 +337,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return res.profile;
   };
 
+  const updateUserHomeVillage = async (village: Village) => {
+    setSelectedVillage(village);
+    if (sessionToken && userProfile) {
+      try {
+        await updateUserProfile({ home_village_id: village.id });
+        showToast(`🏠 Home village updated to ${village.name}!`);
+      } catch (err: any) {
+        console.error('Failed to save home village:', err);
+        showToast(`Switched active view to ${village.name}`);
+      }
+    } else {
+      showToast(`📍 Active village view: ${village.name}`);
+    }
+  };
+
+  const openLoginForVillage = (village: Village, tab: 'login' | 'register' | 'map' = 'login') => {
+    setSelectedVillage(village);
+    setAuthModalTab(tab);
+    setIsAuthModalOpen(true);
+  };
+
   const t = getTranslation(language);
 
   return (
@@ -365,6 +390,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateUserProfile,
         uploadUserAvatar,
         removeUserAvatar,
+        updateUserHomeVillage,
+        openLoginForVillage,
         voiceSearchQuery,
         setVoiceSearchQuery,
         isPostModalOpen,

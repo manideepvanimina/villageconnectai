@@ -25,3 +25,19 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Leaflet Custom Marker Styles */
+.village-custom-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.user-gps-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.leaflet-container {
+  font-family: inherit;
+  z-index: 1;
+}
