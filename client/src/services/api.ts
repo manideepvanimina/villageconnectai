@@ -1,4 +1,5 @@
 import { Village, Service, Product, Update, GovernmentScheme, SmartSearchResult, Language, UserProfile, DemoUser } from '../types';
+import { generateLocalRuralResponse } from './localIntelligence';
 
 const getApiBaseUrl = (): string => {
   const envUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -203,13 +204,23 @@ export const api = {
   // AI Assistant Chat
   // -------------------------------------------------------------------
   async chatAI(message: string, village_id: string, language: Language = 'en'): Promise<any> {
-    const res = await fetch(`${API_BASE_URL}/api/ai/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, village_id, language }),
-    });
-    if (!res.ok) throw new Error('AI chat failed');
-    return res.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, village_id, language }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error(`AI chat failed with HTTP ${res.status}`);
+      return await res.json();
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      console.warn('Backend chat API offline or delayed, providing instant local rural intelligence:', err.message);
+      return generateLocalRuralResponse(message, 'Ramapuram', language);
+    }
   },
 };
 

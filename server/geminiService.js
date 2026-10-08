@@ -113,21 +113,25 @@ function parseRuralIntent(query, language = 'en') {
     };
   }
 
-  // Intent 5: COMMUNITY_INFORMATION or EMERGENCY
+  // Intent 5: DRAFT_NOTICE, COMMUNITY_INFORMATION or EMERGENCY
   if (
-    q.includes('notice') || q.includes('meeting') || q.includes('కరెంట్ పోయిందా') ||
+    q.includes('draft') || q.includes('notice') || q.includes('రాయండి') || q.includes('నోటీసు') ||
+    q.includes('ప్రకటన') || q.includes('सूचना') || q.includes('लिखें') ||
+    q.includes('feeder') || q.includes('maintenance') || q.includes('షట్‌డౌన్') ||
+    q.includes('meeting') || q.includes('sabha') || q.includes('సభ') || q.includes('కరెంట్') ||
     q.includes('water') || q.includes('నీళ్లు') || q.includes('flood') || q.includes('వర్షం') ||
     q.includes('emergency') || q.includes('రోడ్డు') || q.includes('panchayat') || q.includes('పంచాయతీ')
   ) {
-    const isEmergency = q.includes('flood') || q.includes('వర్షం') || q.includes('overflow') || q.includes('emergency') || q.includes('danger');
+    const isDraft = q.includes('draft') || q.includes('notice') || q.includes('feeder') || q.includes('maintenance') || q.includes('ప్రకటన') || q.includes('నోటీసు') || q.includes('రాయండి') || q.includes('सूचना') || q.includes('लिखें');
+    const isEmergency = q.includes('flood') || q.includes('వర్షం') || q.includes('overflow') || q.includes('emergency') || q.includes('danger') || q.includes('ప్రమాదం');
     return {
-      intent: isEmergency ? 'EMERGENCY_INFORMATION' : 'COMMUNITY_INFORMATION',
-      category: isEmergency ? 'emergency' : 'notice',
+      intent: isDraft ? 'DRAFT_NOTICE' : (isEmergency ? 'EMERGENCY_INFORMATION' : 'COMMUNITY_INFORMATION'),
+      category: isDraft ? 'notice_draft' : (isEmergency ? 'emergency' : 'notice'),
       entities: {
-        topic: 'Village Infrastructure & Public Notices',
+        topic: isDraft ? 'Gram Panchayat Official Notice Drafting' : 'Village Infrastructure & Public Notices',
         urgency: isEmergency ? 'Critical' : 'Normal',
       },
-      tools: ['search_updates', 'get_village_context']
+      tools: ['draft_notice', 'search_updates', 'get_village_context']
     };
   }
 
