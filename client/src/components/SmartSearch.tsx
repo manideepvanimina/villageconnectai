@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Mic, Sparkles, Phone, MessageSquare, ExternalLink, CheckCircle2, ChevronRight, Loader2, ArrowRight } from 'lucide-react';
+import { Search, Mic, Sparkles, Phone, MessageSquare, ExternalLink, CheckCircle2, ChevronRight, Loader2, ArrowRight, AlertCircle, PlusCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { api, speakText } from '../services/api';
+import { generateLocalSmartSearchResult } from '../services/localIntelligence';
 import { SmartSearchResult } from '../types';
 
 export const SmartSearch: React.FC = () => {
@@ -45,7 +46,13 @@ export const SmartSearch: React.FC = () => {
     setLoading(true);
     try {
       const villageId = selectedVillage?.id || '11111111-1111-1111-1111-111111111111';
-      const result = await api.smartSearch(q, villageId, language);
+      let result = await api.smartSearch(q, villageId, language);
+      
+      // If server returned empty results, enrich from local high-availability rural intelligence
+      if (!result || !result.results || result.results.length === 0) {
+        result = generateLocalSmartSearchResult(q, selectedVillage?.name || 'Ramapuram', language);
+      }
+      
       setSearchResult(result);
 
       // Speak result explanation aloud in local language for rural audio accessibility!
@@ -53,7 +60,12 @@ export const SmartSearch: React.FC = () => {
         speakText(result.explanation, language);
       }
     } catch (err) {
-      console.error('Smart search error:', err);
+      console.warn('Smart search API issue, falling back to instant local intelligence:', err);
+      const fallbackResult = generateLocalSmartSearchResult(q, selectedVillage?.name || 'Ramapuram', language);
+      setSearchResult(fallbackResult);
+      if (fallbackResult.explanation) {
+        speakText(fallbackResult.explanation, language);
+      }
     } finally {
       setLoading(false);
     }
@@ -194,16 +206,23 @@ export const SmartSearch: React.FC = () => {
                         {item.provider_name || item.seller_name || item.category}
                       </p>
                     </div>
-                    {item.rating && (
-                      <span className="text-xs font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full flex items-center gap-1">
-                        ★ {item.rating}
-                      </span>
-                    )}
-                    {item.price && (
-                      <span className="text-xs font-bold bg-krishi-100 text-krishi-900 px-2 py-0.5 rounded-full">
-                        ₹{item.price} {item.price_unit}
-                      </span>
-                    )}
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      {item.rating && (
+                        <span className="text-xs font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          ★ {item.rating}
+                        </span>
+                      )}
+                      {(item.price !== undefined || item.rate_amount !== undefined) && (
+                        <span className="text-xs font-bold bg-krishi-100 text-krishi-900 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          ₹{item.price ?? item.rate_amount} {item.price_unit || item.pricing_unit || ''}
+                        </span>
+                      )}
+                      {item.availability_status && (
+                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full capitalize">
+                          ● {item.availability_status}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <p className="text-xs text-stone-600 line-clamp-2 mb-3">
@@ -246,6 +265,31 @@ export const SmartSearch: React.FC = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Zero Results Helpful Fallback */}
+          {(!searchResult.results || searchResult.results.length === 0) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center mb-3">
+              <p className="text-sm font-semibold text-amber-900 mb-2">
+                No immediate provider found in current records. Would you like to post this request to the Village Notice Board or contact the Resource Desk?
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  onClick={() => { setActiveTab('home'); setIsPostModalOpen(true); }}
+                  className="px-3 py-1.5 rounded-xl bg-saffron-600 hover:bg-saffron-700 text-white font-bold text-xs flex items-center gap-1 shadow-sm"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span>Post Urgent Notice</span>
+                </button>
+                <a
+                  href="tel:+919848011223"
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs flex items-center gap-1 shadow-sm"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Call Resource Desk (+919848011223)</span>
+                </a>
+              </div>
             </div>
           )}
 

@@ -1,5 +1,5 @@
 import { Village, Service, Product, Update, GovernmentScheme, SmartSearchResult, Language, UserProfile, DemoUser } from '../types';
-import { generateLocalRuralResponse } from './localIntelligence';
+import { generateLocalRuralResponse, generateLocalSmartSearchResult } from './localIntelligence';
 
 const getApiBaseUrl = (): string => {
   const envUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
@@ -191,13 +191,23 @@ export const api = {
   // AI Smart Search Agent
   // -------------------------------------------------------------------
   async smartSearch(query: string, village_id: string, language: Language = 'en'): Promise<SmartSearchResult> {
-    const res = await fetch(`${API_BASE_URL}/api/ai/smart-search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, village_id, language }),
-    });
-    if (!res.ok) throw new Error('Smart Search agent failed');
-    return res.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/smart-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, village_id, language }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error(`Smart Search failed with HTTP ${res.status}`);
+      return await res.json();
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      console.warn('Backend smart-search API offline or delayed, providing instant local rural intelligence:', err.message);
+      return generateLocalSmartSearchResult(query, 'Ramapuram', language);
+    }
   },
 
   // -------------------------------------------------------------------
