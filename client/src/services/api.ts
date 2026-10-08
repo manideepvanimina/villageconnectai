@@ -1,6 +1,17 @@
 import { Village, Service, Product, Update, GovernmentScheme, SmartSearchResult, Language, UserProfile, DemoUser } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const getApiBaseUrl = (): string => {
+  const envUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  if (typeof window !== 'undefined') {
+    const isRemote = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    if (isRemote && envUrl.includes('localhost')) {
+      return '';
+    }
+  }
+  return envUrl;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 function getAuthHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };

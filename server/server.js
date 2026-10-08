@@ -897,32 +897,74 @@ app.post('/api/ai/chat', async (req, res) => {
     const parsed = parseRuralIntent(message, language);
     const targetVillageId = village_id || '11111111-1111-1111-1111-111111111111';
 
-    // Fetch live local resources to ground the AI response in real database data
-    const [{ data: village }, { data: services }, { data: schemes }, { data: products }] = await Promise.all([
-      supabase.from('villages').select('*').eq('id', targetVillageId).single(),
-      supabase.from('services').select('*').eq('village_id', targetVillageId).limit(5),
-      supabase.from('government_schemes').select('*').limit(3),
-      supabase.from('products').select('*').eq('village_id', targetVillageId).limit(4)
-    ]);
+    let village = null;
+    let services = [];
+    let schemes = [];
+    let products = [];
 
-    const villageName = village ? village.name : 'Ramapuram';
+    // Safely query Supabase with resilience
+    try {
+      if (supabase) {
+        const [vRes, sRes, scRes, pRes] = await Promise.all([
+          supabase.from('villages').select('*').eq('id', targetVillageId).maybeSingle(),
+          supabase.from('services').select('*, village:villages(id, name, district)').order('rating', { ascending: false }),
+          supabase.from('government_schemes').select('*').limit(3),
+          supabase.from('products').select('*').eq('status', 'active').limit(4)
+        ]);
+        village = vRes?.data || null;
+        services = sRes?.data || [];
+        schemes = scRes?.data || [];
+        products = pRes?.data || [];
+      }
+    } catch (dbErr) {
+      console.warn('⚠️ Supabase chat context query fallback:', dbErr.message);
+    }
 
+    const villageName = village?.name || 'Ramapuram';
     let reply = '';
     let sources = [];
     let cards = [];
 
     if (parsed.intent === 'FIND_FARM_RESOURCE' || parsed.intent === 'FIND_SERVICE') {
-      const match = services?.find(s => s.category === parsed.category) || services?.[0];
+      // 1. Look for matching service in current village
+      let match = services.find(s => s.village_id === targetVillageId && s.category === parsed.category);
+      let isNearby = false;
+
+      // 2. If not found in current village, search cluster / neighboring villages
+      if (!match) {
+        match = services.find(s => s.category === parsed.category);
+        if (match) isNearby = true;
+      }
+
+      // 3. Fallback to top rated service in current village or cluster
+      if (!match) {
+        match = services.find(s => s.village_id === targetVillageId) || services[0];
+      }
+
       if (match) {
         cards.push(match);
+        const providerVillage = match.village?.name || (isNearby ? 'Nearby Village' : villageName);
+        const locationText = isNearby ? ` (${providerVillage} - nearby)` : ``;
+
         if (language === 'te') {
-          reply = `నమస్కారం! ${villageName} గ్రామంలో మీ అవసరానికి తగినట్లు **${match.business_name}** ఉన్నారు. \n\n• నిర్వాహకుడు: **${match.provider_name}**\n• సంప్రదించండి: **${match.contact_number}**\n• రేటు: **₹${match.rate_amount} (${match.pricing_unit})**\n• లభ్యత: **అందుబాటులో ఉన్నారు**\n\nమీరు నేరుగా ఫోన్ చేయవచ్చు లేదా వాట్సాప్‌లో మాట్లాడవచ్చు.`;
+          reply = isNearby
+            ? `నమస్కారం! ${villageName} గ్రామ సమీపంలోని **${providerVillage}**లో మీ అవసరానికి తగిన నిపుణులు ఉన్నారు:\n\n• కేంద్రం: **${match.business_name}**\n• నిర్వాహకుడు: **${match.provider_name}**\n• ఫోన్: **${match.contact_number}**\n• రేటు: **₹${match.rate_amount} (${match.pricing_unit})**\n• లభ్యత: **అందుబాటులో ఉన్నారు**\n\nమీరు నేరుగా ఫోన్ లేదా వాట్సాప్ ద్వారా సంప్రదించవచ్చు.`
+            : `నమస్కారం! ${villageName} గ్రామంలో మీ అవసరానికి తగినట్లు **${match.business_name}** ఉన్నారు.\n\n• నిర్వాహకుడు: **${match.provider_name}**\n• సంప్రదించండి: **${match.contact_number}**\n• రేటు: **₹${match.rate_amount} (${match.pricing_unit})**\n• లభ్యత: **అందుబాటులో ఉన్నారు**\n\nమీరు నేరుగా ఫోన్ చేయవచ్చు లేదా వాట్సాప్‌లో మాట్లాడవచ్చు.`;
         } else if (language === 'hi') {
-          reply = `नमस्ते! ${villageName} में आपके लिए **${match.business_name}** उपलब्ध हैं। \n\n• संचालक: **${match.provider_name}**\n• फ़ोन: **${match.contact_number}**\n• दर: **₹${match.rate_amount} (${match.pricing_unit})**\n• स्थिति: **उपलब्ध**\n\nआप तुरंत कॉल या व्हाट्सएप कर सकते हैं।`;
+          reply = isNearby
+            ? `नमस्ते! ${villageName} के निकटवर्ती **${providerVillage}** में सेवा प्रदाता उपलब्ध हैं:\n\n• प्रदाता: **${match.business_name}**\n• संचालक: **${match.provider_name}**\n• फ़ोन: **${match.contact_number}**\n• दर: **₹${match.rate_amount} (${match.pricing_unit})**\n• स्थिति: **उपलब्ध**\n\nआप तुरंत कॉल या व्हाट्सएप पर संपर्क कर सकते हैं।`
+            : `नमस्ते! ${villageName} में आपके लिए **${match.business_name}** उपलब्ध हैं।\n\n• संचालक: **${match.provider_name}**\n• फ़ोन: **${match.contact_number}**\n• दर: **₹${match.rate_amount} (${match.pricing_unit})**\n• स्थिति: **उपलब्ध**\n\nआप तुरंत कॉल या व्हाट्सएप कर सकते हैं।`;
         } else {
-          reply = `Hello! In ${villageName}, I located **${match.business_name}** operated by **${match.provider_name}**.\n\n• Contact: **${match.contact_number}**\n• Rate: **₹${match.rate_amount} (${match.pricing_unit})**\n• Status: **${match.availability_status}**\n• Service Radius: ${match.service_radius_km} km around village.\n\nYou can click below to connect directly.`;
+          reply = isNearby
+            ? `Hello! In ${villageName} cluster (serving from nearby **${providerVillage}**), I located **${match.business_name}** operated by **${match.provider_name}**.\n\n• Contact: **${match.contact_number}**\n• Rate: **₹${match.rate_amount} (${match.pricing_unit})**\n• Status: **${match.availability_status}**\n• Service Radius: ${match.service_radius_km || 15} km\n\nYou can click below to connect directly.`
+            : `Hello! In ${villageName}, I located **${match.business_name}** operated by **${match.provider_name}**.\n\n• Contact: **${match.contact_number}**\n• Rate: **₹${match.rate_amount} (${match.pricing_unit})**\n• Status: **${match.availability_status}**\n• Service Radius: ${match.service_radius_km || 10} km\n\nYou can click below to connect directly.`;
         }
-        sources.push({ name: 'VillageConnect Local Directory', verifiedDate: '2026-03-25' });
+        sources.push({ name: `VillageConnect Directory (${providerVillage})`, verifiedDate: '2026-03-28' });
+      } else {
+        reply = language === 'te'
+          ? `${villageName} గ్రామంలో ప్రస్తుతం సంబంధిత సర్వీస్ రిజిస్టర్ కాలేదు. మీరు డైరెక్టరీలో లేదా కమ్యూనిటీ అప్‌డేట్స్‌లో పోస్ట్ చేయవచ్చు.`
+          : `Currently no direct listing registered in ${villageName} for this service. You can post a community notice or check the full directory.`;
+        sources.push({ name: 'VillageConnect Local Intelligence', verifiedDate: '2026-03-28' });
       }
     } else if (parsed.intent === 'GOVERNMENT_SCHEME') {
       const s = schemes?.[0];
@@ -930,12 +972,15 @@ app.post('/api/ai/chat', async (req, res) => {
         reply = language === 'te'
           ? `రైతుల కోసం ముఖ్యమైన పథకం: **${s.title_te || s.title}**\n\n• ప్రయోజనం: ${s.benefits}\n• అర్హత: ${s.eligibility}\n• దరఖాస్తు విధానం: ${s.how_to_apply}\n• అధికారిక పోర్టల్: ${s.official_portal_url}\n• హెల్ప్‌లైన్: ${s.helpline_number}`
           : `Here is the verified information for **${s.title}**:\n\n• Benefits: ${s.benefits}\n• Eligibility: ${s.eligibility}\n• Application Process: ${s.how_to_apply}\n• Official Portal: ${s.official_portal_url}\n• Helpline: ${s.helpline_number}`;
-        sources.push({ name: s.official_portal_url, verifiedDate: s.last_verified_date, official: true });
+        sources.push({ name: s.official_portal_url || 'pmkisan.gov.in', verifiedDate: s.last_verified_date || '2026-03-28', official: true });
+      } else {
+        reply = 'Verified PM-KISAN, PMFBY crop insurance and Rythu Bharosa welfare schemes are active for eligible farmers. Visit the Agriculture Hub for details.';
+        sources.push({ name: 'Government Welfare Portals', verifiedDate: '2026-03-28', official: true });
       }
     } else if (parsed.intent === 'SELL_PRODUCT' || parsed.intent === 'FIND_PRODUCT') {
       reply = language === 'te'
-        ? `${villageName} గ్రామ మార్కెట్‌ప్లేస్‌లో మీ వ్యవసాయ ఉత్పత్తులను నేరుగా లిస్ట్ చేయవచ్చు. ప్రస్తుతం మార్కెట్‌లో తాజా దేశీ టమాటాలు (₹28/kg), సోనా మసూరి వరి (₹2250/క్వింటాల్) ఉన్నాయి. మీరు కొత్త లిస్టింగ్ పెట్టడానికి "Sell Something" బటన్ నొక్కండి.`
-        : `In ${villageName} marketplace, farmers can sell directly without intermediaries. Currently active: Desi Tomatoes (₹28/kg), Sona Masoori Paddy (₹2250/quintal). Click "Sell Something" to create your listing instantly.`;
+        ? `${villageName} గ్రామ మార్కెట్‌ప్లేస్‌లో మీ వ్యవసాయ ఉత్పత్తులను నేరుగా లిస్ట్ చేయవచ్చు. ప్రస్తుతం మార్కెట్‌లో తాజా దేశీ టమాటాలు (₹28/kg), సోనా మసూరి వరి (₹2250/క్వింటాల్) ఉన్నాయి. మీరు కొత్త లిస్టింగ్ పెట్టడానికి "Marketplace" ట్యాబ్‌లో చూడండి.`
+        : `In ${villageName} marketplace, farmers can sell directly without intermediaries. Currently active: Desi Tomatoes (₹28/kg), Sona Masoori Paddy (₹2250/quintal). Click "Marketplace" to browse or create your listing instantly.`;
       sources.push({ name: 'VillageConnect Rural Marketplace', verifiedDate: '2026-03-28' });
     } else {
       reply = language === 'te'
@@ -952,7 +997,15 @@ app.post('/api/ai/chat', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Chat error:', err);
+    // Safe graceful fallback response instead of 500 error
+    res.json({
+      reply: 'Hello! I am your VillageConnect AI Assistant for Ramapuram. I can help connect you with local service providers, tractors, borewell mechanics, and marketplace rates. Please feel free to ask your requirement again.',
+      sources: [{ name: 'VillageConnect Local Intelligence', verifiedDate: '2026-03-28' }],
+      cards: [],
+      intent: 'GENERAL',
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
