@@ -8,7 +8,7 @@ let geminiModel = null;
 try {
   if (geminiApiKey && !geminiApiKey.startsWith('AQ.')) {
     genAI = new GoogleGenerativeAI(geminiApiKey);
-    geminiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    geminiModel = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
   }
 } catch (e) {
   console.warn('⚠️ Standard Gemini SDK init skipped (using robust agent engine):', e.message);
