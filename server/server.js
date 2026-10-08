@@ -15,14 +15,19 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const DB_PASSWORD = process.env.SUPABASE_DB_PASSWORD || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://irapflonmpvloyglqgqo.supabase.co';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlyYXBmbG9ubXB2bG95Z2xxZ3FvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTM1MjE4MiwiZXhwIjoyMTA2OTI4MTgyfQ.4_Lub5QCEyj72u0wVi0_pz4EnN_WYEevH-wshbNRrSU';
+const DB_PASSWORD = process.env.SUPABASE_DB_PASSWORD || 'village@connect@ai';
 
 // Initialize Supabase Admin Client
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false }
-});
+let supabase;
+try {
+  supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false }
+  });
+} catch (err) {
+  console.warn('⚠️ Supabase admin initialization warning:', err.message);
+}
 
 // Helper: Query with fallback to pg direct connection
 async function executeQuery(text, params = []) {

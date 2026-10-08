@@ -27,7 +27,7 @@ export const VillageMapView: React.FC<VillageMapViewProps> = ({
 
   if (!selectedVillage) return null;
 
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyAZ2zG1XyUFi1YX7XM3TgPlvIqo4-XRh74';
   const lat = selectedVillage.latitude || 17.3850;
   const lng = selectedVillage.longitude || 78.4867;
 
